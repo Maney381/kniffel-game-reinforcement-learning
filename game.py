@@ -1,49 +1,39 @@
 import random
-from scoring import (
-    init_scoreboard,
-    calculate_end_score,
-    fill_scoreboard,
-    possible_categories_with_scores,
-    allign_for_printing,
-    print_scoreboard,
-    dice_to_art,
-)
+from dices import Dices
+from scoring import Scoreboard
 
 class Game:
     def __init__(self):
-        self.scoreboard = init_scoreboard() # initalize empty scoreboard
-        self.dices = [0] * 5 # initalize empty dices
+        self.scoreboard = Scoreboard() # initalize empty scoreboard
+        self.dices = Dices() # initalize empty dices
         self.roll_count = 0  # keeps track of the current throws
         self.turn = 1 # keeps track of the current turn
         self.max_turns = 13
 
-    def sort_dices(self):
-        self.dices.sort()
 
     def dice_roll(self, keep_indices = None):
         self.roll_count += 1
         if keep_indices is None:
-            self.dices = [random.randint(1, 6) for _ in range(5)]
-            self.sort_dices()
+            self.dices.dices = [random.randint(1, 6) for _ in range(5)]
         else:
-            self.dices = [self.dices[i] if i in keep_indices else random.randint(1, 6) for i in range(5)]
-        self.sort_dices()
-    
+            self.dices.dices = [self.dices.dices[i] if i in keep_indices else random.randint(1, 6) for i in range(5)]
+        self.dices.dices.sort()
 
-    def get_score(self):
-        return calculate_end_score(self.scoreboard)
+    def get_end_score(self):
+        return self.scoreboard.calculate_end_score()
     
     def update_scoreboard(self, category):
-        self.scoreboard = fill_scoreboard(self.dices, category, self.scoreboard)
+        self.scoreboard.fill_scoreboard(self.dices, category)
 
     def show_possible_scores(self):
-        return allign_for_printing(possible_categories_with_scores(self.dices, self.scoreboard))
-    
-    def show_scoreborad(self):
-        return print_scoreboard(self.scoreboard)
-    
-    def print_dices(self):
-        print("\n\n".join(dice_to_art(d) for d in self.dices))
+        categories = self.scoreboard.possible_categories_with_scores(self.dices)
+        string = 'Possible scores:\n'
+        string += '{:<13}:  {:>0}\n'.format('Category', 'Score')
+        string += '-'*21 + '\n'
+        for category, score in categories.items():
+            string += '{:<13}:  {:>5}'.format(category, score)
+            string += '\n'
+        return string
 
     def get_dice_to_keep(self) -> list[int]:
             """
@@ -51,7 +41,7 @@ class Game:
             """
             while True:
                 try:
-                    user_input = input('Enter the indices (0-5) of the dice to keep, separated by spaces: ').split()
+                    user_input = input('\nEnter the indices (0-5) of the dice to keep, separated by spaces: ').split()
                     indices_to_keep = [int(index) for index in user_input]
                     
                     if not all(0 <= index <= 5 for index in indices_to_keep):
@@ -72,7 +62,7 @@ class Game:
         while True:
             try:
                 category = input('Enter a category to assign your dice score: ')
-                if category in [key for key, value in self.scoreboard.items() if not value]:
+                if category in [key for key, value in self.scoreboard.scoreboard.items() if not value]:
                     return category
                 else:
                     raise ValueError("Category has already been filled. Choose an empty category.")
