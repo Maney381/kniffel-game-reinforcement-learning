@@ -1,82 +1,72 @@
 import gym
-from gym import spaces
 import numpy as np
-from scoring import init_scoreboard, fill_scoreboard, possible_categories_with_scores, calculate_end_score
+from gym import spaces
+from game import Game
 
 class YahtzeeEnv(gym.Env):
+    """s
+    Custom OpenAI Gym environment for Yahtzee.
+    """
     def __init__(self):
         super(YahtzeeEnv, self).__init__()
         
-        # Define the action space (keep/re-roll dice + choose category)
-        self.action_space = spaces.MultiDiscrete([2] * 5 + [13])
+        # Initialize the game
+        self.game = Game()
         
-        # Define the observation space
-        self.observation_space = spaces.Dict({
-            "dices": spaces.MultiDiscrete([6] * 5),  # Values of 5 dice (1 to 6)
-            "rolls_left": spaces.Discrete(4),        # Rolls left: 0 to 3
-            "scoreboard": spaces.Box(low=-1, high=50, shape=(13,), dtype=np.int32),  # Scoreboard (-1 for unfilled)
-            "turn": spaces.Discrete(14)             # Turn number: 1 to 13
-        })
-
-        self.reset()
-
+        # Observation space: (5 dice values, roll count, turn number, scoreboard state)
+        self.observation_space = spaces.Box(low=0, high=6, shape=(5 + 1 + 1 + 13,), dtype=np.int32)
+        
+        # Action space: (5 binary choices for rerolling dice + 13 category choices)
+        self.action_space = spaces.Discrete(45)
+        
     def reset(self):
-        # Initialize the game state
-        self.dices = [0] * 5
-        self.rolls_left = 3
-        self.scoreboard = [-1] * 13  # -1 indicates unfilled categories
-        self.turn = 1
-        self.total_score = 0
+        """Reset the environment and return the initial state."""
+        self.game = Game()
+        self.game.dice_roll()  # Initial roll   
+        return self.get_observation()
+    
+    def get_observation(self):
+        """Return the current game state as an observation."""
+        dice_values = self.game.dices.dices
+        roll_count = [self.game.roll_count]
+        turn_number = [self.game.turn]
+        scoreboard_state = [1 if v != '' else 0 for v in self.game.scoreboard.scoreboard.values()]
         
-        # Return the initial state
-        return self._get_state()
-
+        return np.array(dice_values + roll_count + turn_number + scoreboard_state, dtype=np.int32)
+    
     def step(self, action):
-        # Unpack the action
-        keep_mask = action[:5]
-        chosen_category = action[5]
-
-        # Apply the dice roll based on the keep_mask
-        self.dices = [
-            self.dices[i] if keep_mask[i] == 1 else np.random.randint(1, 7)
-            for i in range(5)
-        ]
-        self.rolls_left -= 1
-
-        # Check if the turn is done (no rolls left or action to end)
-        done = (self.rolls_left == 0 or chosen_category != -1)
-
+        """Take an action and return the next state, reward, done flag, and extra info."""
         reward = 0
-        if done:
-            # Assign score to the chosen category
-            if self.scoreboard[chosen_category] == -1:  # Only fill unfilled categories
-                scores = possible_categories_with_scores(self.dices, self.scoreboard)
-                self.scoreboard[chosen_category] = scores[chosen_category]
-                reward = scores[chosen_category]
+        done = False
+
+        if action < 32:  # Reroll action (action is a 5-bit binary number)
+            reroll_mask = [(action >> i) & 1 for i in range(5)]  # Convert number to bitmask
+            indices_to_keep = [i for i in range(5) if not reroll_mask[i]]
+            self.game.dice_roll(indices_to_keep)
+            reward = 0  # No reward for rerolling
+        else:  # Choosing a category (actions 32-44 map to categories)
+            category_list = list(self.game.scoreboard.scoreboard.keys())
+            category = category_list[action - 32]
+            
+            if self.game.scoreboard.scoreboard[category] == '':  # Valid category
+                self.game.update_scoreboard(category)
+                reward = self.game.get_end_score()
+                self.game.turn += 1
+                self.game.roll_count = 0
+                if self.game.turn > self.game.max_turns:
+                    done = True  # End of game
+                else:
+                    self.game.dice_roll()  # Start next turn
             else:
-                reward = -10  # Penalize for invalid category choice
+                reward = -10  # Penalize invalid category selection
+        
+        return self.get_observation(), reward, done, {}
 
-            self.total_score = calculate_end_score(self.scoreboard)
-            self.turn += 1
-            self.rolls_left = 3
-
-        # End game after 13 turns
-        game_over = self.turn > 13
-
-        # Return the new state, reward, and done flag
-        return self._get_state(), reward, done or game_over, {}
-
-    def _get_state(self):
-        # Encapsulate the current state as a dictionary
-        return {
-            "dices": np.array(self.dices, dtype=np.int32),
-            "rolls_left": self.rolls_left,
-            "scoreboard": np.array(self.scoreboard, dtype=np.int32),
-            "turn": self.turn
-        }
-
-    def render(self, mode="human"):
-        # Optional: Visualize the game state
-        print(f"Turn {self.turn}, Rolls Left: {self.rolls_left}")
-        print(f"Dices: {self.dices}")
-        print(f"Scoreboard: {self.scoreboard}")
+    def render(self, mode='human'):
+        """Render the current state of the game."""
+        print("\n" + str(self.game.dices))
+        print(self.game.scoreboard)
+    
+    def close(self):
+        """Cleanup if necessary."""
+        pass

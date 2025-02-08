@@ -36,9 +36,11 @@ class Scoreboard():
         sum_lower_categories = 0
         for category, item in self.scoreboard.items():
             if category in ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes']:
-                sum_upper_categories += item
+                if item:
+                    sum_upper_categories += int(item)
             else:
-                sum_lower_categories += item
+                if item:
+                    sum_lower_categories += int(item)
 
             if sum_upper_categories >= 63:
                 sum_upper_categories += 35
